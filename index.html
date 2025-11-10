@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI Code Reviewer</title>
+    <style>
+      :root {
+        --bg-dark: #0d1117;
+        --bg-card: #161b22;
+        --border: #30363d;
+        --text: #c9d1d9;
+        --accent: #238636;
+        --accent-hover: #2ea043;
+        --error: #f85149;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font-family: 'Inter', system-ui, sans-serif;
+        background: var(--bg-dark);
+        color: var(--text);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+      }
+
+      .container {
+        background: var(--bg-card);
+        padding: 2rem;
+        width: 450px;
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        box-shadow: 0 0 30px rgba(0, 0, 0, 0.4);
+        animation: fadeIn 0.6s ease-in-out;
+      }
+
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+          transform: translateY(10px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      h1 {
+        color: var(--accent);
+        text-align: center;
+        font-size: 1.8rem;
+        margin-bottom: 1.5rem;
+      }
+
+      label {
+        display: block;
+        font-size: 0.9rem;
+        color: #8b949e;
+        margin-top: 1rem;
+      }
+
+      input {
+        width: 100%;
+        padding: 0.6rem 0.8rem;
+        margin-top: 0.4rem;
+        border-radius: 6px;
+        border: 1px solid var(--border);
+        background: var(--bg-dark);
+        color: var(--text);
+        font-size: 0.9rem;
+        transition: border 0.2s;
+      }
+
+      input:focus {
+        outline: none;
+        border-color: var(--accent);
+      }
+
+      button {
+        width: 100%;
+        margin-top: 1.5rem;
+        padding: 0.8rem;
+        font-weight: 600;
+        border: none;
+        border-radius: 6px;
+        background: var(--accent);
+        color: white;
+        cursor: pointer;
+        transition: background 0.3s ease;
+      }
+
+      button:hover {
+        background: var(--accent-hover);
+      }
+      button:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+
+      .response-box {
+        margin-top: 1rem;
+        background: var(--bg-dark);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 1rem;
+        font-size: 0.85rem;
+        max-height: 280px;
+        overflow-y: auto;
+        white-space: pre-wrap;
+        line-height: 1.4;
+      }
+
+      .success {
+        border-color: var(--accent);
+        color: #8ef28e;
+      }
+      .error {
+        border-color: var(--error);
+        color: #ff9b9b;
+      }
+
+      .loader {
+        border: 3px solid #2f363d;
+        border-top: 3px solid var(--accent);
+        border-radius: 50%;
+        width: 20px;
+        height: 20px;
+        animation: spin 0.8s linear infinite;
+        display: inline-block;
+        vertical-align: middle;
+        margin-right: 6px;
+      }
+
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+
+      .step {
+        font-size: 0.85rem;
+        padding: 0.3rem 0;
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+      }
+
+      .dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: #444;
+        transition: background 0.3s;
+      }
+
+      .dot.active {
+        background: var(--accent);
+      }
+      .dot.error {
+        background: var(--error);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>🤖 AI Code Reviewer</h1>
+
+      <label>GitHub Token</label>
+      <input
+        id="githubToken"
+        type="password"
+        placeholder="ghp_xxxxxxxxxxxxxx"
+      />
+
+      <label>Gemini API Key</label>
+      <input id="geminiKey" type="password" placeholder="AIza..." />
+
+      <label>Repository Full Name</label>
+      <input id="repoFullName" placeholder="e.g., username/repo-name" />
+
+      <label>Repository Clone URL</label>
+      <input
+        id="repoCloneUrl"
+        placeholder="https://github.com/username/repo.git"
+      />
+
+      <label>Pull Request Number</label>
+      <input id="prNumber" type="number" placeholder="7" />
+
+      <label>Head Branch (Source)</label>
+      <input id="headBranch" placeholder="feature-branch" />
+
+      <label>Base Branch (Target)</label>
+      <input id="baseBranch" placeholder="main" />
+
+      <button id="sendBtn">🚀 Run Code Review</button>
+
+      <div id="steps"></div>
+
+      <div id="responseBox" class="response-box"></div>
+    </div>
+
+    <script>
+      const $ = (id) => document.getElementById(id);
+      const responseBox = $('responseBox');
+      const stepsBox = $('steps');
+      const sendBtn = $('sendBtn');
+
+      function step(text, status = 'pending') {
+        const div = document.createElement('div');
+        div.className = 'step';
+        div.innerHTML = `<span class="dot ${
+          status === 'done' ? 'active' : ''
+        }"></span>${text}`;
+        stepsBox.appendChild(div);
+        return div.querySelector('.dot');
+      }
+
+      function updateStep(dot, state) {
+        dot.classList.remove('active', 'error');
+        if (state === 'done') dot.classList.add('active');
+        if (state === 'error') dot.classList.add('error');
+      }
+
+      function showMessage(msg, type = '') {
+        responseBox.className = 'response-box ' + type;
+        responseBox.textContent = msg;
+      }
+
+      $('sendBtn').addEventListener('click', async () => {
+        const githubToken = $('githubToken').value.trim();
+        const geminiKey = $('geminiKey').value.trim();
+        const repoFullName = $('repoFullName').value.trim();
+        const repoCloneUrl = $('repoCloneUrl').value.trim();
+        const prNumber = parseInt($('prNumber').value.trim());
+        const headBranch = $('headBranch').value.trim();
+        const baseBranch = $('baseBranch').value.trim();
+
+        if (
+          !githubToken ||
+          !geminiKey ||
+          !repoFullName ||
+          !repoCloneUrl ||
+          !prNumber ||
+          !headBranch ||
+          !baseBranch
+        ) {
+          showMessage('⚠️ Please fill all fields.', 'error');
+          return;
+        }
+
+        const payload = {
+          action: 'opened',
+          pull_request: {
+            number: prNumber,
+            head: {
+              repo: { clone_url: repoCloneUrl, full_name: repoFullName },
+              ref: headBranch,
+            },
+            base: { ref: baseBranch },
+          },
+        };
+
+        stepsBox.innerHTML = '';
+        const s1 = step('Preparing request...');
+        const s2 = step('Sending to FastAPI...');
+        const s3 = step('Running AI review...');
+        const s4 = step('Posting comment to GitHub...');
+        const s5 = step('Finalizing...');
+
+        showMessage('⏳ Processing...', '');
+        sendBtn.disabled = true;
+        sendBtn.innerHTML = '<span class="loader"></span>Processing...';
+
+        try {
+          updateStep(s1, 'done');
+          updateStep(s2, 'active');
+
+          const res = await fetch('http://127.0.0.1:8080/webhook', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Github-Token': githubToken,
+              'X-Gemini-Api-Key': geminiKey,
+            },
+            body: JSON.stringify(payload),
+          });
+
+          updateStep(s2, 'done');
+          updateStep(s3, 'active');
+
+          const data = await res.json();
+          if (res.ok) {
+            updateStep(s3, 'done');
+            updateStep(s4, 'done');
+            updateStep(s5, 'done');
+            showMessage(JSON.stringify(data, null, 2), 'success');
+          } else {
+            updateStep(s3, 'error');
+            showMessage('❌ ' + JSON.stringify(data, null, 2), 'error');
+          }
+        } catch (err) {
+          updateStep(s3, 'error');
+          showMessage('⚠️ Request failed: ' + err.message, 'error');
+        } finally {
+          sendBtn.disabled = false;
+          sendBtn.textContent = '🚀 Run Code Review';
+        }
+      });
+    </script>
+  </body>
+</html>
