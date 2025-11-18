@@ -281,15 +281,18 @@
           updateStep(s1, 'done');
           updateStep(s2, 'active');
 
-          const res = await fetch('http://127.0.0.1:8080/webhook', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'X-Github-Token': githubToken,
-              'X-Gemini-Api-Key': geminiKey,
-            },
-            body: JSON.stringify(payload),
-          });
+          const res = await fetch(
+            'https://code-review-adk-production.up.railway.app/webhook',
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'X-Github-Token': githubToken,
+                'X-Gemini-Api-Key': geminiKey,
+              },
+              body: JSON.stringify(payload),
+            }
+          );
 
           updateStep(s2, 'done');
           updateStep(s3, 'active');
