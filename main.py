@@ -1,226 +1,166 @@
+# main.py
+
 import os
-import tempfile
-import subprocess
 import traceback
+
 from fastapi import FastAPI, Request, Header
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse, RedirectResponse
 from dotenv import load_dotenv
-from services.ai_review_service import run_ai_code_review
-from services.github_service import post_github_comment, get_diff_via_api
-from services.cleanup_service import safe_rmtree
-from utils.logger import log
-from fastapi.responses import JSONResponse
 
-# ------------------------------------------------------------
-# ⚙️ App Initialization
-# ------------------------------------------------------------
+from services.ai_review_service import run_ai_code_review
+from services.github_service import (
+    create_installation_token,
+    get_diff_via_api,
+    post_github_comment,
+)
+from utils.logger import log
+
 load_dotenv()
+
 app = FastAPI()
 
-# ✅ Allow UI (HTML/JS) to access backend
+# CORS – allow your UI to call this backend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"],           # TODO: restrict in prod
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# ---------------------------------------------------------------------
-# 🌐 Root endpoint
-# ---------------------------------------------------------------------
-@app.get("/")
-def root():
-    return {"ok": True, "service": "meetings"}
-    
+GITHUB_APP_NAME = os.getenv("GITHUB_APP_NAME")  # same as on GitHub
+
+
 # ------------------------------------------------------------
-# 📬 Webhook Endpoint (Dynamic)
+# Optional: Install URL endpoint (for your frontend)
 # ------------------------------------------------------------
-@app.post("/webhook")
-async def handle_pr_event(
-    request: Request,
-    x_github_token: str = Header(None),
-    x_gemini_api_key: str = Header(None)
-):
+@app.get("/github/install")
+def github_install_redirect():
     """
-    Handle GitHub PR events dynamically using user-provided tokens.
+    Redirect to GitHub App installation page, similar to Vercel's "Connect GitHub".
     """
-    tmpdir = None
-    
-    try:
-        payload = await request.json()
-        action = payload.get("action")
-        pr = payload.get("pull_request", {})
-
-        # Validate required headers
-        if not x_github_token or not x_gemini_api_key:
-            return JSONResponse(
-                status_code=400,
-                content={
-                    "status": "error",
-                    "error": "Missing required headers: X-Github-Token or X-Gemini-Api-Key"
-                }
-            )
-
-        if action not in ["opened", "synchronize", "reopened"]:
-            return {"status": f"ignored action: {action}"}
-
-        repo_full_name = pr["head"]["repo"]["full_name"]
-        repo_url = pr["head"]["repo"]["clone_url"]
-        head_branch = pr["head"]["ref"]
-        base_branch = pr["base"]["ref"]
-        pr_number = pr["number"]
-
-        log(f"🔔 PR #{pr_number} {head_branch} → {base_branch} ({repo_full_name})")
-
-        # Inject token into clone URL
-        if repo_url.startswith("https://github.com/"):
-            repo_url = repo_url.replace("https://", f"https://{x_github_token}@")
-
-        # ✅ Make Gemini key available globally for ADK Runner
-        os.environ["GOOGLE_API_KEY"] = x_gemini_api_key
-
-        # --------------------------------------------------------
-        # Try via GitHub API
-        # --------------------------------------------------------
-        try:
-            diff = get_diff_via_api(x_github_token, repo_full_name, pr_number)
-            if not diff:
-                raise ValueError("Empty diff via API")
-
-            log(f"✅ Diff fetched via API ({len(diff)} chars)")
-            ai_review = await run_ai_code_review(diff, pr_number)
-
-            if ai_review:
-                post_github_comment(x_github_token, repo_full_name, pr_number, ai_review)
-                return {
-                    "status": "success",
-                    "message": "Review complete",
-                    "source": "GitHub API",
-                    "pr_number": pr_number
-                }
-
-            return JSONResponse(
-                status_code=500,
-                content={
-                    "status": "error",
-                    "error": "AI review failed to generate response",
-                    "source": "GitHub API"
-                }
-            )
-
-        except Exception as e:
-            log(f"⚠️ API method failed: {e}")
-            traceback.print_exc()
-
-        # --------------------------------------------------------
-        # Fallback: Git diff method
-        # --------------------------------------------------------
-        tmpdir = tempfile.mkdtemp(prefix="code_review_")
-        
-        try:
-            # Clone repository
-            clone_result = subprocess.run(
-                ["git", "clone", repo_url, tmpdir],
-                check=True,
-                capture_output=True,
-                text=True,
-                timeout=300
-            )
-            
-            # Fetch latest changes
-            subprocess.run(
-                ["git", "fetch", "origin"],
-                cwd=tmpdir,
-                check=True,
-                capture_output=True,
-                text=True,
-                timeout=60
-            )
-
-            # Generate diff
-            diff_result = subprocess.run(
-                ["git", "diff", f"origin/{base_branch}..origin/{head_branch}"],
-                cwd=tmpdir,
-                capture_output=True,
-                text=True,
-                timeout=60
-            )
-
-            diff = diff_result.stdout.strip()
-            if not diff:
-                log("⚠️ No diff found between branches.")
-                return {
-                    "status": "skipped",
-                    "message": "No changes detected between branches",
-                    "source": "git diff"
-                }
-
-            log(f"✅ Diff generated ({len(diff)} chars)")
-            ai_review = await run_ai_code_review(diff, pr_number)
-
-            if ai_review:
-                post_github_comment(x_github_token, repo_full_name, pr_number, ai_review)
-                return {
-                    "status": "success",
-                    "message": "Review complete",
-                    "source": "git diff",
-                    "pr_number": pr_number
-                }
-
-            return JSONResponse(
-                status_code=500,
-                content={
-                    "status": "error",
-                    "error": "AI review failed to generate response",
-                    "source": "git diff"
-                }
-            )
-
-        except subprocess.TimeoutExpired as e:
-            log(f"❌ Git operation timeout: {e}")
-            return JSONResponse(
-                status_code=504,
-                content={
-                    "status": "error",
-                    "error": f"Git operation timed out: {str(e)}",
-                    "source": "git diff"
-                }
-            )
-        
-        except subprocess.CalledProcessError as e:
-            log(f"❌ Git command failed: {e.stderr}")
-            return JSONResponse(
-                status_code=500,
-                content={
-                    "status": "error",
-                    "error": f"Git command failed: {e.stderr or str(e)}",
-                    "source": "git diff"
-                }
-            )
-
-    except KeyError as e:
-        log(f"❌ Missing required field in payload: {e}")
-        return JSONResponse(
-            status_code=400,
-            content={
-                "status": "error",
-                "error": f"Invalid payload structure: missing {str(e)}"
-            }
-        )
-    
-    except Exception as e:
-        log(f"❌ Unexpected error: {e}")
-        traceback.print_exc()
+    if not GITHUB_APP_NAME:
         return JSONResponse(
             status_code=500,
-            content={
-                "status": "error",
-                "error": f"Unexpected error: {str(e)}",
-                "type": type(e).__name__
-            }
+            content={"error": "GITHUB_APP_NAME is not configured"},
         )
-    
-    finally:
-        if tmpdir:
-            safe_rmtree(tmpdir)
+
+    install_url = f"https://github.com/apps/{GITHUB_APP_NAME}/installations/new"
+    return RedirectResponse(url=install_url)
+
+
+# ------------------------------------------------------------
+# GitHub Webhook Handler (App-based, like Vercel)
+# ------------------------------------------------------------
+@app.post("/webhook")
+async def github_webhook(
+    request: Request,
+    x_github_event: str = Header(None),
+    x_hub_signature_256: str = Header(None),  # TODO: verify with WEBHOOK_SECRET
+):
+    """
+    Handle GitHub App webhooks:
+    - installation: (optional) you can log/store installation info
+    - pull_request: run AI code review and comment on the PR
+    """
+    try:
+        payload = await request.json()
+    except Exception:
+        log("❌ Failed to parse webhook JSON")
+        return JSONResponse(status_code=400, content={"error": "Invalid JSON"})
+
+    # TODO: verify x_hub_signature_256 with GITHUB_WEBHOOK_SECRET for security
+
+    log(f"📬 Received GitHub event: {x_github_event}")
+
+    # -------------------------------
+    # Installation events (optional)
+    # -------------------------------
+    if x_github_event == "installation":
+        try:
+            installation_id = payload["installation"]["id"]
+            account_login = payload["installation"]["account"]["login"]
+            log(f"🔧 App installed for account={account_login}, installation_id={installation_id}")
+            # Yahan aap DB me store bhi kar sakte ho agar future UI ke liye zaroori ho
+            return {"status": "installation_received"}
+        except Exception as e:
+            log(f"⚠️ Error handling installation event: {e}")
+            return {"status": "installation_error"}
+
+    # -------------------------------
+    # Pull Request events → core flow
+    # -------------------------------
+    if x_github_event == "pull_request":
+        try:
+            action = payload.get("action")
+            if action not in ["opened", "synchronize", "reopened"]:
+                log(f"ℹ️ Ignored PR action: {action}")
+                return {"status": f"ignored action: {action}"}
+
+            installation_id = payload["installation"]["id"]
+            repo_full_name = payload["repository"]["full_name"]
+            pr = payload["pull_request"]
+
+            pr_number = pr["number"]
+            head_branch = pr["head"]["ref"]
+            base_branch = pr["base"]["ref"]
+
+            log(
+                f"🔔 PR #{pr_number} {head_branch} → {base_branch} "
+                f"({repo_full_name}), installation_id={installation_id}"
+            )
+
+            # 1) Get installation access token (for this repo / installation)
+            installation_token = create_installation_token(installation_id)
+
+            # 2) Fetch diff via GitHub API
+            diff = get_diff_via_api(installation_token, repo_full_name, pr_number)
+
+            if not diff.strip():
+                log("⚠️ Empty diff – no changes detected")
+                return {
+                    "status": "skipped",
+                    "message": "No changes detected in PR diff",
+                    "pr_number": pr_number,
+                }
+
+            log(f"✅ Diff fetched ({len(diff)} chars)")
+
+            # 3) Run AI review (your existing logic)
+            ai_review = await run_ai_code_review(diff, pr_number)
+
+            if not ai_review:
+                log("⚠️ AI review returned empty response")
+                return JSONResponse(
+                    status_code=500,
+                    content={
+                        "status": "error",
+                        "error": "AI review did not generate a response",
+                    },
+                )
+
+            # 4) Post comment on PR using installation token
+            post_github_comment(installation_token, repo_full_name, pr_number, ai_review)
+
+            return {
+                "status": "success",
+                "message": "Review posted successfully",
+                "pr_number": pr_number,
+                "repo": repo_full_name,
+                "source": "github_app",
+            }
+
+        except Exception as e:
+            log(f"❌ Error handling pull_request event: {e}")
+            traceback.print_exc()
+            return JSONResponse(
+                status_code=500,
+                content={"status": "error", "error": str(e), "event": "pull_request"},
+            )
+
+    # -------------------------------
+    # Other events (ignored)
+    # -------------------------------
+    log(f"ℹ️ Ignored event type: {x_github_event}")
+    return {"status": "ignored", "event": x_github_event}

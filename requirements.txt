@@ -5,3 +5,4 @@ requests
 google-adk
 pygithub
 ollama
+pyjwt
