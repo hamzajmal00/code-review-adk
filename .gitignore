@@ -1,6 +1,59 @@
-/venv
-/.env
+# Environment Variables (SENSITIVE)
 .env
-/.pytest_cache/
-/__pycache__/
-/private-key.pem
+.env.local
+.env.*.local
+*.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual Environments
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+*.cover
+
+# Database Files (SQLite)
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+code_reviewer.db
+code_review_sessions.db
+
+# GitHub App
+private-key.pem
+*.pem
+
+# OS Files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Distribution / Packaging
+build/
+dist/
+*.egg-info/
+.eggs/
