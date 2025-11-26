@@ -42,9 +42,19 @@ from fastapi.security import OAuth2PasswordBearer
 
 from auth_dependency import get_current_user
 
+# Rate Limiting
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+
 load_dotenv()
 
 app = FastAPI()
+
+# Initialize rate limiter
+limiter = Limiter(key_func=get_remote_address, default_limits=["100/minute"])
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # CORS – allow your UI to call this backend
 app.add_middleware(
@@ -65,8 +75,23 @@ def on_startup():
 
 
 
+@app.get("/")
+def root():
+    """Root endpoint - API status"""
+    return {
+        "status": "online",
+        "service": "AI Code Review API",
+        "version": "1.0.0"
+    }
+
+@app.get("/health")
+def health_check():
+    """Health check endpoint for monitoring"""
+    return {"status": "healthy"}
+
 @app.get("/me")
-def get_me(current_user: User = Depends(get_current_user)):
+@limiter.limit("30/minute")
+def get_me(request: Request, current_user: User = Depends(get_current_user)):
     return {
         "id": current_user.id,
         "github_username": current_user.github_username,
@@ -80,14 +105,15 @@ GITHUB_APP_NAME = os.getenv("GITHUB_APP_NAME")  # same as on GitHub
 
 
 
-GITHUB_CLIENT_ID = "Ov23lisaj8nXzoK709f6"
-GITHUB_CLIENT_SECRET = "214a7c7523eef41cedd7b0771bfa4846feb2df63"
-GITHUB_OAUTH_REDIRECT_URL = "https://code-review-adk.onrender.com/auth/github/callback"
+GITHUB_CLIENT_ID = os.getenv("GITHUB_CLIENT_ID")
+GITHUB_CLIENT_SECRET = os.getenv("GITHUB_CLIENT_SECRET")
+GITHUB_OAUTH_REDIRECT_URL = os.getenv("GITHUB_OAUTH_REDIRECT_URL")
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
 
 
 @app.get("/auth/github/login")
-def github_login():
+@limiter.limit("10/minute")
+def github_login(request: Request):
     """
     Step 1: Frontend isko call karega.
     Hum user ko GitHub ke authorize page par redirect kar denge.
@@ -111,7 +137,8 @@ def github_login():
 
 # ------------------------------------------------------------
 @app.get("/auth/github/callback")
-def github_callback(code: str, db: Session = Depends(get_db)):
+@limiter.limit("10/minute")
+def github_callback(request: Request, code: str, db: Session = Depends(get_db)):
     """
     Step 2: GitHub yahan par `code` ke sath redirect karega.
     Hum:
@@ -241,6 +268,7 @@ def github_callback(code: str, db: Session = Depends(get_db)):
 # Optional: Install URL endpoint (for your frontend)
 # ------------------------------------------------------------
 @app.get("/github/install/callback")
+@limiter.limit("20/minute")
 def github_install_callback(
     request: Request,
     installation_id: int = Query(...),
@@ -273,25 +301,11 @@ def github_install_callback(
     return {"status": "installation_linked", "installation_id": installation_id}
 
 
-@app.get("/github/install/callback")
-def github_install_callback(installation_id: int, state: str, db: Session = Depends(get_db)):
-    print("i am here")
-    user_id = int(state)  # your user ID
-    create_installation(
-        db,
-        installation_id=installation_id,
-        account_login="...",
-        account_type="User",
-        user_id=user_id
-    )
-    return {"status": "linked"}
-
-
-
 # ------------------------------------------------------------
 # GitHub Webhook Handler (App-based, like Vercel)
 # ------------------------------------------------------------
 @app.post("/webhook")
+@limiter.limit("60/minute")  # Allow 60 webhook calls per minute
 async def github_webhook(
     request: Request,
     x_github_event: str = Header(None),
