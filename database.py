@@ -12,6 +12,14 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 # example:
 # DATABASE_URL = "postgresql://postgres:admin@localhost:5432/fastauth"
 
+# Validate DATABASE_URL
+if not DATABASE_URL:
+    raise ValueError(
+        "DATABASE_URL environment variable is not set. "
+        "Please set it in your .env file or environment variables. "
+        "Example: postgresql://user:password@host:5432/dbname"
+    )
+
 engine = create_engine(DATABASE_URL)
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

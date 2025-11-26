@@ -7,3 +7,27 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: 3.10.0
+      - key: DATABASE_URL
+        fromDatabase:
+          name: adk-code-reviewer-db
+          property: connectionString
+      # GitHub OAuth Configuration - Set these in Render Dashboard
+      # - key: GITHUB_APP_NAME
+      #   sync: false
+      # - key: GITHUB_CLIENT_ID
+      #   sync: false
+      # - key: GITHUB_CLIENT_SECRET
+      #   sync: false
+      # - key: GITHUB_OAUTH_REDIRECT_URL
+      #   sync: false
+      # - key: GOOGLE_API_KEY
+      #   sync: false
+      # - key: JWT_SECRET_KEY
+      #   sync: false
+      # - key: FRONTEND_URL
+      #   value: http://localhost:3000
+
+databases:
+  - name: adk-code-reviewer-db
+    databaseName: code_reviewer
+    user: code_reviewer
