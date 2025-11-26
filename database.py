@@ -12,13 +12,15 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 # example:
 # DATABASE_URL = "postgresql://postgres:admin@localhost:5432/fastauth"
 
-# Validate DATABASE_URL
+# Fallback to SQLite if DATABASE_URL is not set
 if not DATABASE_URL:
-    raise ValueError(
+    import warnings
+    warnings.warn(
         "DATABASE_URL environment variable is not set. "
-        "Please set it in your .env file or environment variables. "
-        "Example: postgresql://user:password@host:5432/dbname"
+        "Falling back to SQLite for development. "
+        "For production, please set DATABASE_URL to a PostgreSQL connection string."
     )
+    DATABASE_URL = "sqlite:///./code_reviewer.db"
 
 engine = create_engine(DATABASE_URL)
 
