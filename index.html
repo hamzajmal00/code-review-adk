@@ -282,7 +282,8 @@
           updateStep(s2, 'active');
 
           const res = await fetch(
-            'https://code-review-adk-production.up.railway.app/webhook',
+            // 'https://code-review-adk-production.up.railway.app/webhook',
+            'http://127.0.0.1:8000/webhook',
             {
               method: 'POST',
               headers: {

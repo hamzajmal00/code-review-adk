@@ -1,2 +1,6 @@
 /venv
 /.env
+.env
+/.pytest_cache/
+/__pycache__/
+/private-key.pem

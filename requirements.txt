@@ -6,3 +6,10 @@ google-adk
 pygithub
 ollama
 pyjwt
+sqlalchemy
+psycopg2-binary 
+python-jose[cryptography]
+jose
+gunicorn
+uvicorn[standard]
+
