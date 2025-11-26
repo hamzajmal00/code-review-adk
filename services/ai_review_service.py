@@ -6,7 +6,7 @@ from google.adk.sessions import DatabaseSessionService
 from code_review_agent.agent import agent as code_review_agent
 from utils.logger import log
 
-DB_URL = "sqlite:///code_review_sessions.db"
+DB_URL = "sqlite+aiosqlite:///code_review_sessions.db"
 session_service = DatabaseSessionService(db_url=DB_URL)
 runner = Runner(agent=code_review_agent, app_name="agents", session_service=session_service)
 
