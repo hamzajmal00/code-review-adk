@@ -1,13 +1,25 @@
 import uuid
 import traceback
+import os
 from google.genai import types
 from google.adk.runners import Runner
 from google.adk.sessions import DatabaseSessionService
 from code_review_agent.agent import agent as code_review_agent
 from utils.logger import log
 
-DB_URL = "sqlite+aiosqlite:///code_review_sessions.db"
-session_service = DatabaseSessionService(db_url=DB_URL)
+# AI Session Database Configuration
+# Can use the same DATABASE_URL as main app, or a separate one
+# Falls back to SQLite for development
+AI_SESSION_DB_URL = os.getenv("AI_SESSION_DB_URL") or os.getenv("DATABASE_URL")
+
+if not AI_SESSION_DB_URL or AI_SESSION_DB_URL.startswith("sqlite://"):
+    # Use async SQLite for local development
+    AI_SESSION_DB_URL = "sqlite+aiosqlite:///code_review_sessions.db"
+elif AI_SESSION_DB_URL.startswith("postgresql://"):
+    # Convert PostgreSQL URL to use asyncpg driver for async support
+    AI_SESSION_DB_URL = AI_SESSION_DB_URL.replace("postgresql://", "postgresql+asyncpg://")
+
+session_service = DatabaseSessionService(db_url=AI_SESSION_DB_URL)
 runner = Runner(agent=code_review_agent, app_name="agents", session_service=session_service)
 
 async def run_ai_code_review(diff: str, pr_number: int):

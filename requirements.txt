@@ -13,4 +13,5 @@ jose
 gunicorn
 uvicorn[standard]
 aiosqlite
+asyncpg
 
