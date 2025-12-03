@@ -82,8 +82,8 @@ GITHUB_APP_NAME = os.getenv("GITHUB_APP_NAME")  # same as on GitHub
 
 GITHUB_CLIENT_ID = "Ov23lisaj8nXzoK709f6"
 GITHUB_CLIENT_SECRET = "214a7c7523eef41cedd7b0771bfa4846feb2df63"
-GITHUB_OAUTH_REDIRECT_URL = "https://code-review-adk.onrender.com/auth/github/callback"
-FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
+GITHUB_OAUTH_REDIRECT_URL = "https://pr-inspector-frontend.vercel.app/auth/github/callback"
+FRONTEND_URL = "https://pr-inspector-frontend.vercel.app/"
 
 
 @app.get("/auth/github/login")
