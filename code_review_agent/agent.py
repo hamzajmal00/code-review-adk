@@ -1,10 +1,17 @@
 # agent_config.py
 from google.adk.agents import Agent
 from .tools.github_tool import post_github_comment  # ✅ correct import
+from google.adk.models.lite_llm import LiteLlm
+
+
+model = LiteLlm(
+    model="openrouter/kwaipilot/kat-coder-pro-v1:free",
+    api_key="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",
+)
 
 agent = Agent(
     name="code_review_agent",
-    model="gemini-2.0-flash",
+    model=model,
     description="Expert code review assistant for full-stack projects",
     instruction="""
 You are an experienced senior software architect and code reviewer.
