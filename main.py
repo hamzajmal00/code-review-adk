@@ -62,7 +62,9 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/github/login")
 def on_startup():
     Base.metadata.create_all(bind=engine)
 
-
+@app.get("/ping")
+def ping():
+    return {"status": "awake", "message": "Server is active 🚀"}
 
 
 @app.get("/me")
