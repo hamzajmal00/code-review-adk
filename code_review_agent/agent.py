@@ -62,8 +62,8 @@ Always provide structured JSON in this format:
   "summary": "Overall findings and impression",
   "strengths": ["clear naming", "good modularity"],
   "issues": [
-    {"file": "path/to/file", "line": 42, "severity": "high", "issue": "Missing input validation on API endpoint"},
-    {"file": "src/components/UserForm.tsx", "line": 18, "severity": "medium", "issue": "useEffect missing dependency array"}
+    {"file": "path/to/file", "code": "app.post('/api/user', (req, res) => { // No validation here })", "severity": "high", "issue": "Missing input validation on API endpoint"},
+    {"file": "src/components/UserForm.tsx",   "code": "useEffect(() => { // Logic here }, [])", "severity": "medium", "issue": "useEffect missing dependency array"}
   ],
   "recommendations": ["Add DTO validation", "Split large components into smaller chunks"]
 }

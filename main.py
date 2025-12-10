@@ -30,7 +30,7 @@ from crud.installation_crud import create_installation, get_installation_by_inst
 from crud.repo_crud import upsert_repository
 from crud.plan_crud import get_plan_by_slug
 from database import SessionLocal ,get_db
-from models import User  # optional, mainly for typing
+from models import User ,Installation  # optional, mainly for typing
 from crud.user_crud import (
     get_user_by_github_id,
     create_user,
@@ -75,6 +75,46 @@ def get_me(current_user: User = Depends(get_current_user)):
         "plan": current_user.plan.slug if current_user.plan else None
     }
 
+
+# Add this to your main.py
+
+@app.get("/me/installations")
+def get_my_installations(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Check if current user has any GitHub app installations linked.
+    Returns installation details if found.
+    """
+    
+    # Query installations for this user
+    installations = db.query(Installation).filter(
+        Installation.user_id == current_user.id
+    ).all()
+    
+    # Prepare response
+    has_installations = len(installations) > 0
+    
+    installation_list = []
+    for inst in installations:
+        installation_list.append({
+            "installation_id": inst.installation_id,
+            "account_login": inst.account_login,
+            "account_type": inst.account_type,
+            "created_at": inst.created_at.isoformat() if inst.created_at else None,
+        })
+    
+    return {
+        "has_installations": has_installations,
+        "count": len(installations),
+        "installations": installation_list,
+        "user": {
+            "id": current_user.id,
+            "github_username": current_user.github_username,
+            "plan": current_user.plan.slug if current_user.plan else None,
+        }
+    }
 
 GITHUB_APP_NAME = os.getenv("GITHUB_APP_NAME")  # same as on GitHub
 
